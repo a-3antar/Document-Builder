@@ -1,0 +1,26 @@
+{
+  "id": "production_report",
+  "name": "Production Report",
+  "description": "KPIs, tables, and observations.",
+  "content_kind": "workbook",
+  "schema": "workbook_content.schema.json",
+  "word": {
+    "font": "Calibri",
+    "arabic_font": "Arial",
+    "body_size_pt": 11,
+    "margins_cm": 2.5,
+    "heading_numbering": false
+  },
+  "excel": {
+    "header_fill": "1F4E78",
+    "header_font_color": "FFFFFF",
+    "default_col_width": 18,
+    "freeze_panes": true
+  },
+  "pdf": {
+    "font": "Helvetica",
+    "margins_cm": 2.0,
+    "header": true,
+    "footer": true
+  }
+}

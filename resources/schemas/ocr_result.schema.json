@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ocr_result/1.0",
+  "title": "OcrResult",
+  "type": "object",
+  "required": ["schema_version", "original_text"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "original_text": {"type": "string"},
+    "corrected_text": {"type": ["string", "null"]},
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text"],
+        "additionalProperties": false,
+        "properties": {
+          "text": {"type": "string"},
+          "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "uncertain": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

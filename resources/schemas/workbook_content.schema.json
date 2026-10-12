@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workbook_content/1.0",
+  "title": "WorkbookContent",
+  "type": "object",
+  "required": ["schema_version", "metadata", "sheets"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "metadata": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string"},
+        "language": {"enum": ["en", "ar", "mixed"]},
+        "author": {"type": "string"}
+      }
+    },
+    "sheets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "columns", "rows"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "maxLength": 31, "pattern": "^[^\\[\\]:*?/\\\\]+$"},
+          "columns": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "freeze_header": {"type": "boolean"},
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["type"],
+                "additionalProperties": false,
+                "properties": {
+                  "type": {"enum": ["text", "number", "date", "boolean", "blank", "formula"]},
+                  "value": {},
+                  "number_format": {"type": "string"}
+                },
+                "allOf": [
+                  {"if": {"properties": {"type": {"const": "number"}}}, "then": {"required": ["value"], "properties": {"value": {"type": "number"}}}},
+                  {"if": {"properties": {"type": {"const": "boolean"}}}, "then": {"required": ["value"], "properties": {"value": {"type": "boolean"}}}},
+                  {"if": {"properties": {"type": {"enum": ["text", "date", "formula"]}}}, "then": {"required": ["value"], "properties": {"value": {"type": "string"}}}}
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
