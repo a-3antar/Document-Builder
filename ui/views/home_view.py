@@ -11,7 +11,7 @@ from ui.views.base_view import BaseView
 
 class HomeView(BaseView):
     title = "Home"
-    subtitle = "Choose a template to start. Document creation arrives in the next milestone."
+    subtitle = "Choose a template to start a new document."
 
     def __init__(self, parent, registry: TemplateRegistry, on_pick: Callable[[Template], None]) -> None:
         super().__init__(parent)

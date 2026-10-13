@@ -56,6 +56,10 @@ class SchemaValidator:
             self._cache[schema_file] = json.loads(path.read_text(encoding="utf-8"))
         return self._cache[schema_file]
 
+    def schema(self, schema_file: str) -> dict[str, Any]:
+        """Return the loaded schema (used to build prompts)."""
+        return self._load(schema_file)
+
     def validate(self, data: Any, schema_file: str) -> list[ValidationIssue]:
         """Return all issues; an empty list means valid."""
         try:

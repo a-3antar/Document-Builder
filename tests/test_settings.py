@@ -69,6 +69,24 @@ class SecretStoreTests(unittest.TestCase):
         self.assertEqual(store.get("gemini"), "k")
         self.assertEqual(kr.data, {})
 
+    def test_env_fallback_order(self):
+        env = {"GEMINI_API_KEY": "second", "ALT_GEMINI_KEY": "first"}
+        store = SecretStore(FakeKeyring(), env=env)
+        self.assertEqual(store.get("gemini"), "first")
+        self.assertEqual(store.source("gemini"), "environment")
+
+    def test_keyring_beats_env_and_env_not_persisted(self):
+        kr = FakeKeyring()
+        store = SecretStore(kr, env={"GEMINI_API_KEY": "env"})
+        self.assertEqual(store.get("gemini"), "env")
+        self.assertEqual(kr.data, {})  # env value never copied to keyring
+        store.set("gemini", "saved")
+        self.assertEqual(store.get("gemini"), "saved")
+        self.assertEqual(store.source("gemini"), "keyring")
+
+    def test_blank_env_ignored(self):
+        self.assertIsNone(SecretStore(FakeKeyring(), env={"ALT_GEMINI_KEY": "  "}).get("gemini"))
+
 
 if __name__ == "__main__":
     unittest.main()

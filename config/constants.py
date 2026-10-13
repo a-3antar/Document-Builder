@@ -49,3 +49,8 @@ SUPPORTED_IMAGE_EXTENSIONS: Final = frozenset({".png", ".jpg", ".jpeg", ".bmp", 
 SUPPORTED_INPUT_EXTENSIONS: Final = SUPPORTED_IMAGE_EXTENSIONS | {".pdf", ".docx", ".xlsx"}
 DEFAULT_TESSERACT_LANGS: Final = "ara+eng"
 DEFAULT_EASYOCR_LANGS: Final = ("ar", "en")
+
+OLLAMA_INSTALL_URL: Final = "https://ollama.com/download"
+GEMINI_KEY_URL: Final = "https://aistudio.google.com/apikey"
+GEMINI_ENV_VARS: Final = ("ALT_GEMINI_KEY", "GEMINI_API_KEY")
+GEMINI_SECRET_NAME: Final = "gemini"

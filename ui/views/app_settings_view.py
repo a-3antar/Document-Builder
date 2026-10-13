@@ -42,6 +42,10 @@ class AppSettingsView(BaseView):
         self._row(form, 5, "Poppler folder (optional)", self._path_entry(form, "poppler_path", folder=True))
         ttk.Button(self, text="Save", command=self._save).pack(anchor="w", pady=PAD)
 
+    def settings_changed(self, settings: AppSettings) -> None:
+        """Keep the local copy in sync after any view saved settings."""
+        self._settings = settings
+
     @staticmethod
     def _row(form, row: int, label: str, widget) -> None:
         ttk.Label(form, text=label).grid(row=row, column=0, sticky="w", padx=(0, PAD), pady=4)

@@ -8,9 +8,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from config.constants import KEYRING_SERVICE, SETTINGS_FILE_NAME
+from config.constants import KEYRING_SERVICE, SETTINGS_FILE_NAME, GEMINI_ENV_VARS, GEMINI_SECRET_NAME
 from config.settings import AppSettings
 from core.exceptions import SecretStorageUnavailableError, SettingsStorageError, SettingsValidationError
+from typing import Mapping, Any
 
 log = logging.getLogger(__name__)
 
@@ -52,12 +53,14 @@ class SettingsRepository:
             raise SettingsStorageError(f"Could not save settings: {exc}",
                                        hint="Check folder permissions and free disk space.") from exc
 
-
 class SecretStore:
-    """API keys via keyring; never plaintext. Falls back to a session-only cache."""
+    """API keys: session cache, then keyring, then read-only env vars. Never plaintext on disk."""
 
-    def __init__(self, backend: Any = None) -> None:
+    def __init__(self, backend: Any = None, env: Mapping[str, str] | None = None,
+                 env_vars: Mapping[str, tuple[str, ...]] | None = None) -> None:
         self._backend = backend
+        self._env = os.environ if env is None else env
+        self._env_vars = dict(env_vars) if env_vars is not None else {GEMINI_SECRET_NAME: GEMINI_ENV_VARS}
         self._session: dict[str, str] = {}
 
     def _kr(self) -> Any:
@@ -82,17 +85,40 @@ class SecretStore:
         self._session[name] = value
         return False
 
+    def _from_env(self, name: str) -> str | None:
+        for var in self._env_vars.get(name, ()):
+            value = (self._env.get(var) or "").strip()
+            if value:
+                return value
+        return None
+
+    def source(self, name: str) -> str | None:
+        """Where the secret comes from: 'session', 'keyring', 'environment' or None."""
+        if name in self._session:
+            return "session"
+        try:
+            if self._kr().get_password(KEYRING_SERVICE, name):
+                return "keyring"
+        except Exception:  # noqa: BLE001
+            pass
+        return "environment" if self._from_env(name) else None
+
     def get(self, name: str) -> str | None:
         if name in self._session:
             return self._session[name]
         try:
-            return self._kr().get_password(KEYRING_SERVICE, name)
+            value = self._kr().get_password(KEYRING_SERVICE, name)
+            if value:
+                return value
         except Exception:  # noqa: BLE001
-            return None
+            pass
+        return self._from_env(name)
 
     def delete(self, name: str) -> None:
+        """Remove session and keyring copies (environment variables are never touched)."""
         self._session.pop(name, None)
         try:
             self._kr().delete_password(KEYRING_SERVICE, name)
         except Exception:  # noqa: BLE001
             pass
+

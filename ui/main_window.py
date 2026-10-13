@@ -8,23 +8,22 @@ from tkinter import messagebox, ttk
 from config.constants import APP_NAME, QUEUE_POLL_INTERVAL_MS, WINDOW_MIN_SIZE
 from config.settings import AppSettings
 from core.exceptions import DocumentBuilderError
-from document.template_registry import Template, TemplateRegistry
-from repositories.settings_repository import SettingsRepository
-from services.task_service import TaskService
+from document.template_registry import Template
+from services.app_services import AppServices
 from ui.navigation import Sidebar
 from ui.theme import apply_theme
+from ui.views.ai_settings_view import AiSettingsView
 from ui.views.app_settings_view import AppSettingsView
-from ui.views.base_view import BaseView
+from ui.views.base_view import BaseView, error_text
+from ui.views.create_document_view import CreateDocumentView
 from ui.views.home_view import HomeView
 
 log = logging.getLogger(__name__)
 
 
 class MainWindow:
-    def __init__(self, root: tk.Tk, settings: AppSettings, repo: SettingsRepository,
-                 registry: TemplateRegistry, tasks: TaskService) -> None:
-        self.root, self._settings, self._repo = root, settings, repo
-        self._registry, self._tasks = registry, tasks
+    def __init__(self, root: tk.Tk, settings: AppSettings, services: AppServices) -> None:
+        self.root, self._settings, self._svc = root, settings, services
         self._views: dict[str, BaseView] = {}
         self._current: str | None = None
 
@@ -34,11 +33,15 @@ class MainWindow:
 
         self._status = tk.StringVar(value="Ready")
         ttk.Label(root, textvariable=self._status, anchor="w", relief="sunken").pack(side="bottom", fill="x")
-        Sidebar(root, [("home", "Home"), ("settings", "Application Settings")], self.show).pack(side="left", fill="y")
+        Sidebar(root, [("home", "Home"), ("create", "Create Document"),
+                       ("ai", "AI Settings"), ("settings", "Application Settings")],
+                self.show).pack(side="left", fill="y")
         self._workspace = ttk.Frame(root)
         self._workspace.pack(side="left", fill="both", expand=True)
 
-        self._views["home"] = HomeView(self._workspace, registry, self._on_template)
+        self._views["home"] = HomeView(self._workspace, services.templates, self._on_template)
+        self._views["create"] = CreateDocumentView(self._workspace, services, lambda: self._settings)
+        self._views["ai"] = AiSettingsView(self._workspace, settings, services, self._save_settings)
         self._views["settings"] = AppSettingsView(self._workspace, settings, self._save_settings)
         self.show("home")
 
@@ -53,25 +56,29 @@ class MainWindow:
         self._current = key
 
     def _on_template(self, template: Template) -> None:
+        self._views["create"].set_template(template.id)  # type: ignore[attr-defined]
         self._status.set(f"Selected template: {template.name}")
+        self.show("create")
 
     def _save_settings(self, settings: AppSettings) -> None:
         try:
-            self._repo.save(settings)
+            self._svc.settings_repo.save(settings)
         except DocumentBuilderError as exc:
-            messagebox.showerror("Could not save", f"{exc}\n\n{exc.hint}")
+            messagebox.showerror("Could not save", error_text(exc))
             return
         self._settings = settings
+        for view in self._views.values():
+            view.settings_changed(settings)
         self._status.set("Settings saved")
 
     def _poll(self) -> None:
         """Main-thread consumer of worker events."""
         try:
-            self._tasks.poll()
+            self._svc.tasks.poll()
         except Exception:  # noqa: BLE001 - keep the loop alive
             log.exception("Event dispatch failed")
         self.root.after(QUEUE_POLL_INTERVAL_MS, self._poll)
 
     def _close(self) -> None:
-        self._tasks.shutdown()
+        self._svc.tasks.shutdown()
         self.root.destroy()
