@@ -1,4 +1,4 @@
-"""XLSX exporter (openpyxl): typed cells, safe text, validated formulas, tables."""
+"""XLSX exporter (openpyxl): typed cells, safe text, validated formulas, tables, native charts."""
 from __future__ import annotations
 
 import math
@@ -8,19 +8,23 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.chart import BarChart, LineChart, PieChart, Reference
+from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from config.constants import DEFAULT_ACCENT_HEX, EXCEL_MAX_COL_WIDTH, EXCEL_TABLE_STYLE
+from core.chart_rules import chart_problems, find_column, norm
 from core.exceptions import FormulaPolicyError
-from core.models import Cell, Sheet, WorkbookContentModel
+from core.models import Cell, ChartSpec, Sheet, WorkbookContentModel
 from document.base_exporter import FileExporter
 from document.formula_safety import validate_formula, write_text_cell
 from document.template_registry import Template
 
 _BAD_TITLE_RE = re.compile(r"[\[\]:*?/\\]")
 _HEX_RE = re.compile(r"^[0-9A-Fa-f]{6}$")
+_CHART_W_CM, _CHART_H_CM, _CHART_ROW_STEP = 18, 9, 20
 
 
 def _hex(value: Any, default: str) -> str:
@@ -39,7 +43,7 @@ class ExcelExporter(FileExporter):
     extension = ".xlsx"
     content_type = WorkbookContentModel
     features = frozenset({"sheets", "typed_cells", "formulas", "tables", "freeze_panes",
-                          "number_formats", "rtl"})
+                          "number_formats", "rtl", "charts"})
 
     def __init__(self, template: Template) -> None:
         cfg = template.excel
@@ -55,9 +59,14 @@ class ExcelExporter(FileExporter):
         wb.properties.title = content.metadata.title
         wb.properties.creator = content.metadata.author or "Document Builder AI"
         used: set[str] = set()
+        built: dict[str, tuple[Any, Sheet]] = {}  # normalized name -> (worksheet, source sheet)
         sheets = content.sheets or [Sheet("Sheet1", ("",), ())]
         for index, sheet in enumerate(sheets, 1):
-            self._sheet(wb, sheet, index, used, content.metadata.language == "ar", warnings)
+            ws = self._sheet(wb, sheet, index, used, content.metadata.language == "ar", warnings)
+            built.setdefault(norm(sheet.name), (ws, sheet))
+        placed: dict[str, int] = {}
+        for spec in content.charts:
+            self._chart(built, spec, placed, warnings)
         wb.save(str(path))
 
     def _verify(self, path: Path) -> None:
@@ -80,7 +89,7 @@ class ExcelExporter(FileExporter):
         return title
 
     def _sheet(self, wb: Workbook, sheet: Sheet, index: int, used: set[str], rtl: bool,
-               warnings: list[str]) -> None:
+               warnings: list[str]) -> Any:
         ws = wb.create_sheet(self._unique_title(sheet.name, used))
         if rtl:
             ws.sheet_view.rightToLeft = True
@@ -112,6 +121,7 @@ class ExcelExporter(FileExporter):
                           ref=f"A1:{get_column_letter(ncols)}{len(sheet.rows) + 1}")
             table.tableStyleInfo = TableStyleInfo(name=EXCEL_TABLE_STYLE, showRowStripes=True)
             ws.add_table(table)
+        return ws
 
     @staticmethod
     def _headers(columns: tuple[str, ...], ncols: int) -> list[str]:
@@ -125,6 +135,46 @@ class ExcelExporter(FileExporter):
             seen.add(text.lower())
             out.append(text)
         return out
+
+    # --- charts ---
+    @staticmethod
+    def _make_chart(spec: ChartSpec) -> Any:
+        if spec.type == "pie":
+            chart = PieChart()
+            chart.dataLabels = DataLabelList()
+            chart.dataLabels.showPercent = True
+        elif spec.type == "line":
+            chart = LineChart()
+        else:
+            chart = BarChart()
+            chart.type = "col" if spec.type == "column" else "bar"
+        chart.title = spec.title
+        if spec.type != "pie":
+            chart.x_axis.title = spec.x_title or None
+            chart.y_axis.title = spec.y_title or None
+            chart.x_axis.delete = chart.y_axis.delete = False  # axes are hidden otherwise
+        chart.width, chart.height = _CHART_W_CM, _CHART_H_CM
+        return chart
+
+    def _chart(self, built: dict[str, tuple[Any, Sheet]], spec: ChartSpec,
+               placed: dict[str, int], warnings: list[str]) -> None:
+        """Add a native chart bound to the table; skip with a warning if it cannot be drawn."""
+        ws, sheet = built.get(norm(spec.sheet), (None, None))
+        problems = chart_problems(sheet, spec)
+        if problems:
+            warnings.append(f"Chart '{spec.title}' was skipped: {'; '.join(problems)}.")
+            return
+        chart = self._make_chart(spec)
+        last_row = len(sheet.rows) + 1
+        for name in spec.value_columns:
+            col = find_column(sheet, name) + 1
+            chart.add_data(Reference(ws, min_col=col, min_row=1, max_row=last_row),
+                           titles_from_data=True)
+        cat = find_column(sheet, spec.category_column) + 1
+        chart.set_categories(Reference(ws, min_col=cat, min_row=2, max_row=last_row))
+        slot = placed.get(ws.title, 0)
+        placed[ws.title] = slot + 1
+        ws.add_chart(chart, f"{get_column_letter(ws.max_column + 2)}{2 + slot * _CHART_ROW_STEP}")
 
     # --- cells ---
     def _cell(self, target: Any, cell: Cell, warnings: list[str], where: str) -> int:

@@ -7,6 +7,7 @@ from typing import Any, Literal
 from config.constants import SCHEMA_VERSION
 
 CellType = Literal["text", "number", "date", "boolean", "blank", "formula"]
+ChartType = Literal["column", "bar", "line", "pie"]
 
 
 @dataclass(frozen=True)
@@ -112,15 +113,29 @@ class Sheet:
     freeze_header: bool = True
 
 
+@dataclass(frozen=True)
+class ChartSpec:
+    """Chart bound to a table (sheet + columns); never holds its own data."""
+    type: ChartType
+    title: str
+    sheet: str
+    category_column: str
+    value_columns: tuple[str, ...]
+    x_title: str = ""
+    y_title: str = ""
+
+
 @dataclass
 class WorkbookContentModel:
     metadata: Metadata = field(default_factory=Metadata)
     sheets: list[Sheet] = field(default_factory=list)
     needs_review: bool = False
     schema_version: str = SCHEMA_VERSION
+    charts: list[ChartSpec] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], *, needs_review: bool = False) -> "WorkbookContentModel":
+        """Build from schema-validated data."""
         meta = data.get("metadata", {})
         sheets = [
             Sheet(
@@ -132,8 +147,13 @@ class WorkbookContentModel:
             )
             for s in data.get("sheets", [])
         ]
+        charts = [
+            ChartSpec(c["type"], c["title"], c["sheet"], c["category_column"],
+                      tuple(c["value_columns"]), c.get("x_title", ""), c.get("y_title", ""))
+            for c in data.get("charts", [])
+        ]
         return cls(Metadata(meta.get("title", ""), meta.get("language", "en"), meta.get("author", "")),
-                   sheets, needs_review, data.get("schema_version", SCHEMA_VERSION))
+                   sheets, needs_review, data.get("schema_version", SCHEMA_VERSION), charts)
 
 
 @dataclass(frozen=True)

@@ -31,4 +31,7 @@ def render_preview(content: DocumentContentModel | WorkbookContentModel) -> str:
                 lines.append(" | ".join("" if c.type == "blank" or c.value is None else str(c.value)
                                         for c in row))
             lines.append("")
+        for chart in content.charts:
+            lines.append(f"[Chart:{chart.type}] {chart.title} - {chart.sheet}: "
+                         f"{chart.category_column} vs {', '.join(chart.value_columns)}")
     return "\n".join(lines).rstrip() + "\n"

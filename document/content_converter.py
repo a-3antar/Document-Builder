@@ -52,7 +52,6 @@ def document_to_workbook(doc: DocumentContentModel) -> WorkbookContentModel:
         sheets.insert(0, Sheet("Content", ("Type", "Text"), tuple(text_rows)))
     return WorkbookContentModel(doc.metadata, sheets, doc.needs_review, doc.schema_version)
 
-
 def adapt_content(content: DocumentContentModel | WorkbookContentModel, fmt: OutputFormat
                   ) -> tuple[DocumentContentModel | WorkbookContentModel, list[str]]:
     """Return content matching the format plus user-facing notes about any conversion."""
@@ -61,7 +60,9 @@ def adapt_content(content: DocumentContentModel | WorkbookContentModel, fmt: Out
             "Document content was converted to a workbook: tables became sheets, "
             "other text went to the 'Content' sheet."]
     if fmt is not OutputFormat.XLSX and isinstance(content, WorkbookContentModel):
-        return workbook_to_document(content), [
-            "Workbook content was converted to a document: each sheet became a table; "
-            "formulas are shown as text."]
+        notes = ["Workbook content was converted to a document: each sheet became a table; "
+                 "formulas are shown as text."]
+        if content.charts:
+            notes.append("Charts are only available in Excel output and were left out.")
+        return workbook_to_document(content), notes
     return content, []

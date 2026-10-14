@@ -25,8 +25,7 @@ class TemplateRegistryTests(unittest.TestCase):
         reg = TemplateRegistry(SchemaValidator())
         reg.load()
         self.assertEqual({t.id for t in reg.all()},
-                         {"blank_structured", "business_report", "production_report"})
-
+                         {"blank_structured", "business_report", "production_report", "data_report"})
     def test_missing_schema_names_template(self):
         with self.assertRaisesRegex(TemplateValidationError, "Template 'T'.*not found"):
             self._load(_good(schema="missing.schema.json"))

@@ -8,6 +8,7 @@ from typing import Any
 from ai.model_registry import ProviderRegistry
 from ai.prompts import build_generation_prompt, build_repair_prompt
 from config.constants import ContentKind
+from core.chart_rules import check_charts
 from core.exceptions import AiResponseParseError
 from core.models import DocumentContentModel, WorkbookContentModel
 from core.schema_validator import SchemaValidator, ValidationIssue, parse_json_response
@@ -40,29 +41,35 @@ class AiService:
         """Run on a worker thread; progress goes through ctx."""
         provider = self._providers.create(provider_id)
         schema = self._validator.schema(template.schema)
+        kind = template.content_kind
         self._progress(ctx, 10, "Generating content...")
-        raw = provider.generate_text(build_generation_prompt(instructions, schema), model, json_mode=True)
+        raw = provider.generate_text(build_generation_prompt(instructions, schema, kind),
+                                     model, json_mode=True)
 
         self._progress(ctx, 60, "Validating...")
-        data, issues = self._check(raw, template.schema)
+        data, issues = self._check(raw, template)
         if not issues:
             return StructuredResult(self._build(data, template), raw)
 
         log.info("Validation failed (%d issues); one repair attempt", len(issues))
         self._progress(ctx, 70, "Repairing invalid output...")
         repaired = provider.generate_text(
-            build_repair_prompt(schema, raw, [str(i) for i in issues]), model, json_mode=True)
-        data, issues = self._check(repaired, template.schema)
+            build_repair_prompt(schema, raw, [str(i) for i in issues], kind), model, json_mode=True)
+        data, issues = self._check(repaired, template)
         if not issues:
             return StructuredResult(self._build(data, template), raw, repair_raw=repaired)
         return StructuredResult(None, raw, issues, repaired)  # user must review/retry
 
-    def _check(self, raw: str, schema_file: str) -> tuple[Any, list[ValidationIssue]]:
+    def _check(self, raw: str, template: Template) -> tuple[Any, list[ValidationIssue]]:
+        """Parse, validate against the schema, then check chart references for workbooks."""
         try:
             data = parse_json_response(raw)
         except AiResponseParseError as exc:
             return None, [ValidationIssue("", str(exc))]
-        return data, self._validator.validate(data, schema_file)
+        issues = self._validator.validate(data, template.schema)
+        if not issues and template.content_kind is ContentKind.WORKBOOK:
+            issues = check_charts(WorkbookContentModel.from_dict(data))
+        return data, issues
 
     @staticmethod
     def _build(data: Any, template: Template) -> DocumentContentModel | WorkbookContentModel:

@@ -7,7 +7,6 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import Any, Callable
 
-from config.constants import OutputFormat, ProviderId
 from config.settings import AppSettings
 from core.interfaces import ExportResult
 from core.models import DocumentContentModel, WorkbookContentModel
@@ -18,6 +17,7 @@ from services.task_service import EventKind, TaskContext, TaskEvent
 from ui.components.content_preview import render_preview
 from ui.theme import PAD
 from ui.views.base_view import BaseView, error_text
+from config.constants import ContentKind, OutputFormat, ProviderId
 
 _FORMAT_LABELS = {OutputFormat.DOCX: "Word", OutputFormat.XLSX: "Excel", OutputFormat.PDF: "PDF"}
 
@@ -151,6 +151,8 @@ class CreateDocumentView(BaseView):
         self.last_result = result
         if result.ok:
             self._write(render_preview(result.content))
+            if self._last_template and self._last_template.content_kind is ContentKind.WORKBOOK:
+                self._fmt.set(_FORMAT_LABELS[OutputFormat.XLSX])  # workbook content belongs in Excel
             self._status.set("Content generated. Review it below, then export.")
             self._export_btn.state(["!disabled"])
         else:
