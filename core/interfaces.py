@@ -46,6 +46,7 @@ class ExportResult:
     path: Path
     size_bytes: int
     duration_seconds: float
+    warnings: tuple[str, ...] = ()  # non-fatal issues the user should see
 
 
 class BaseExporter(ABC):

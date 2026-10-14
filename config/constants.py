@@ -54,3 +54,23 @@ OLLAMA_INSTALL_URL: Final = "https://ollama.com/download"
 GEMINI_KEY_URL: Final = "https://aistudio.google.com/apikey"
 GEMINI_ENV_VARS: Final = ("ALT_GEMINI_KEY", "GEMINI_API_KEY")
 GEMINI_SECRET_NAME: Final = "gemini"
+
+# --- Export (Stage 5) ---
+# (regular, bold) file names looked up in resources/fonts; first match wins.
+ARABIC_FONT_FILES: Final = (
+    ("Amiri-Regular.ttf", "Amiri-Bold.ttf"),
+    ("NotoNaskhArabic-Regular.ttf", "NotoNaskhArabic-Bold.ttf"),
+    ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf"),
+)
+# Built-in PDF fonts allowed in templates -> bold variant.
+PDF_LATIN_FONTS: Final = (
+    ("Helvetica", "Helvetica-Bold"),
+    ("Times-Roman", "Times-Bold"),
+    ("Courier", "Courier-Bold"),
+)
+FORMULA_MAX_LENGTH: Final = 255
+FORMULA_ALLOWED_FUNCTIONS: Final = frozenset(
+    {"SUM", "AVERAGE", "MIN", "MAX", "COUNT", "COUNTA", "ROUND", "ABS", "IF"})
+EXCEL_TABLE_STYLE: Final = "TableStyleMedium2"
+EXCEL_MAX_COL_WIDTH: Final = 60
+DEFAULT_ACCENT_HEX: Final = "1F4E78"
