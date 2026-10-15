@@ -1,4 +1,4 @@
-"""Image & OCR: import files, run OCR, review text, export."""
+"""Image & OCR: import files, run OCR, review text, then send to Structured Review."""
 from __future__ import annotations
 
 import tkinter as tk
@@ -6,13 +6,13 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import Any, Callable
 
-from config.constants import (OCR_UNCERTAIN_CLOSE, OCR_UNCERTAIN_OPEN, OcrMethod, OutputFormat,
-                              ProviderId, SUPPORTED_IMAGE_EXTENSIONS)
+from config.constants import (OCR_UNCERTAIN_CLOSE, OCR_UNCERTAIN_OPEN, OcrMethod, ProviderId,
+                              SUPPORTED_IMAGE_EXTENSIONS)
 from config.settings import AppSettings
 from core.exceptions import OcrModelDownloadRequiredError
-from core.interfaces import ExportResult
-from core.models import OCRResult
+from core.models import DocumentContentModel, OCRResult
 from document.ocr_converter import ocr_text_to_document
+from document.template_registry import Template
 from image_processing.image_preprocessor import PreprocessOptions
 from services.app_services import AppServices
 from services.ocr_service import OcrRequest
@@ -28,18 +28,19 @@ _METHODS = {"Gemini Vision (cloud)": OcrMethod.GEMINI_VISION,
 _BASE = {"Tesseract": OcrMethod.TESSERACT, "EasyOCR": OcrMethod.EASYOCR}
 _VISION_PROVIDER = {OcrMethod.GEMINI_VISION: ProviderId.GEMINI.value,
                     OcrMethod.OLLAMA_VISION: ProviderId.OLLAMA.value}
-_FORMATS = {"Word": OutputFormat.DOCX, "Excel": OutputFormat.XLSX, "PDF": OutputFormat.PDF}
 _MARKER_RE = rf"\{OCR_UNCERTAIN_OPEN[0]}\{OCR_UNCERTAIN_OPEN[1]}.*?\{OCR_UNCERTAIN_CLOSE[0]}\{OCR_UNCERTAIN_CLOSE[1]}"
+
+ReviewCallback = Callable[[DocumentContentModel, Template, str], None]
 
 
 class OcrView(BaseView):
     title = "Image & OCR"
-    subtitle = "Import images or PDFs, extract text, review it, then export."
+    subtitle = "Import images or PDFs, extract text, correct it, then send it to Structured Review."
 
     def __init__(self, parent: Any, services: AppServices,
-                 get_settings: Callable[[], AppSettings]) -> None:
+                 get_settings: Callable[[], AppSettings], on_review: ReviewCallback) -> None:
         super().__init__(parent)
-        self._svc, self._get_settings = services, get_settings
+        self._svc, self._get_settings, self._on_review = services, get_settings, on_review
         self._files: list[Path] = []
         self._task: int | None = None
         self._result: OCRResult | None = None
@@ -100,16 +101,14 @@ class OcrView(BaseView):
         self._orig = self._pane(panes, "Original OCR text (read-only)", editable=False)
         self._edit = self._pane(panes, "Reviewed text (editable)", editable=True)
 
-        export = ttk.Frame(self)
-        export.pack(fill="x", pady=(PAD, 0))
-        ttk.Label(export, text="Title").pack(side="left")
+        send = ttk.Frame(self)
+        send.pack(fill="x", pady=(PAD, 0))
+        ttk.Label(send, text="Title").pack(side="left")
         self._title_var = tk.StringVar(value="OCR result")
-        ttk.Entry(export, textvariable=self._title_var, width=28).pack(side="left", padx=PAD)
-        self._fmt = tk.StringVar(value="Word")
-        ttk.Combobox(export, textvariable=self._fmt, state="readonly", width=8,
-                     values=list(_FORMATS)).pack(side="left")
-        self._export_btn = ttk.Button(export, text="Export...", command=self._export, state="disabled")
-        self._export_btn.pack(side="left", padx=PAD)
+        ttk.Entry(send, textvariable=self._title_var, width=28).pack(side="left", padx=PAD)
+        self._review_btn = ttk.Button(send, text="Send to Structured Review",
+                                      command=self._send_to_review, state="disabled")
+        self._review_btn.pack(side="left")
         self._method_changed()
 
     def _pane(self, panes: ttk.PanedWindow, label: str, editable: bool) -> tk.Text:
@@ -246,9 +245,9 @@ class OcrView(BaseView):
         for seg in flagged:
             self._mark(self._orig, seg.text)
         self._mark(self._edit, _MARKER_RE, regex=True)
-        self._status.set(f"Done. {len(flagged)} uncertain line(s) highlighted - review before export."
-                         if flagged else "Done. Review the text before export.")
-        self._export_btn.state(["!disabled"])
+        self._status.set(f"Done. {len(flagged)} uncertain line(s) highlighted - review before sending."
+                         if flagged else "Done. Review the text, then send it to Structured Review.")
+        self._review_btn.state(["!disabled"])
 
     @staticmethod
     def _set_text(widget: tk.Text, text: str, editable: bool) -> None:
@@ -269,42 +268,11 @@ class OcrView(BaseView):
             widget.tag_add("uncertain", pos, end)
             start = end
 
-    # --- export ---
-    def _export(self) -> None:
+    # --- hand-off ---
+    def _send_to_review(self) -> None:
         text = self._edit.get("1.0", "end").strip()
         if not text:
-            messagebox.showinfo("Export", "There is no text to export.")
+            messagebox.showinfo("Image & OCR", "There is no text to send.")
             return
-        left = text.count(OCR_UNCERTAIN_OPEN)
-        if left and not messagebox.askyesno(
-                "Unresolved markers", f"The text still has {left} uncertain marker(s). Export anyway?"):
-            return
-        fmt = _FORMATS[self._fmt.get()]
         content = ocr_text_to_document(text, self._title_var.get().strip() or "OCR result")
-        template = self._svc.templates.get("blank_structured")
-        folder = self._get_settings().output_dir
-        options: dict[str, Any] = {"defaultextension": f".{fmt.value}",
-                                   "filetypes": [(self._fmt.get(), f"*.{fmt.value}")],
-                                   "initialfile": self._svc.documents.suggest_filename(content, fmt)}
-        if folder and Path(folder).is_dir():
-            options["initialdir"] = folder
-        chosen = filedialog.asksaveasfilename(**options)  # asks before overwriting
-        if not chosen:
-            return
-        self._busy(True, "Exporting...")
-        self._svc.tasks.submit(
-            lambda ctx: self._svc.documents.export(content, template, fmt, Path(chosen), overwrite=True),
-            on_event=self._on_exported)
-
-    def _on_exported(self, event: TaskEvent) -> None:
-        if event.kind is EventKind.PROGRESS:
-            return
-        self._busy(False)
-        if event.kind is EventKind.ERROR:
-            self._status.set("Export failed.")
-            messagebox.showerror("Export failed", error_text(event.payload))
-        elif event.kind is EventKind.RESULT:
-            res: ExportResult = event.payload
-            self._status.set(f"Saved {res.path.name} ({res.size_bytes / 1024:.1f} KB).")
-            if res.warnings:
-                messagebox.showwarning("Export notes", "\n".join(f"- {w}" for w in res.warnings))
+        self._on_review(content, self._svc.templates.get("blank_structured"), "OCR")

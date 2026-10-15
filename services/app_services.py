@@ -10,6 +10,7 @@ from services.ai_service import AiService
 from services.dependency_service import DependencyService
 from services.document_service import DocumentService
 from services.ocr_service import OcrService
+from services.review_service import ReviewService
 from services.task_service import TaskService
 
 
@@ -25,3 +26,4 @@ class AppServices:
     documents: DocumentService
     ocr: OcrService
     deps: DependencyService
+    review: ReviewService

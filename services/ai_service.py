@@ -9,7 +9,7 @@ from ai.model_registry import ProviderRegistry
 from ai.prompts import build_generation_prompt, build_repair_prompt
 from config.constants import ContentKind
 from core.chart_rules import check_charts
-from core.exceptions import AiResponseParseError
+from core.exceptions import AiResponseParseError, DocumentBuilderError
 from core.models import DocumentContentModel, WorkbookContentModel
 from core.schema_validator import SchemaValidator, ValidationIssue, parse_json_response
 from document.template_registry import Template
@@ -53,8 +53,14 @@ class AiService:
 
         log.info("Validation failed (%d issues); one repair attempt", len(issues))
         self._progress(ctx, 70, "Repairing invalid output...")
-        repaired = provider.generate_text(
-            build_repair_prompt(schema, raw, [str(i) for i in issues], kind), model, json_mode=True)
+        try:
+            repaired = provider.generate_text(
+                build_repair_prompt(schema, raw, [str(i) for i in issues], kind), model,
+                json_mode=True)
+        except DocumentBuilderError as exc:  # keep the original response for manual review
+            log.warning("Repair attempt failed: %s", type(exc).__name__)
+            issues.append(ValidationIssue("", f"Repair attempt failed: {exc} {exc.hint}".strip()))
+            return StructuredResult(None, raw, issues)
         data, issues = self._check(repaired, template)
         if not issues:
             return StructuredResult(self._build(data, template), raw, repair_raw=repaired)

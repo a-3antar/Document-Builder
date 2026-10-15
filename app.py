@@ -31,6 +31,7 @@ from services.document_service import DocumentService
 from services.ocr_service import OcrService
 from services.task_service import TaskService
 from ui.main_window import MainWindow
+from services.review_service import ReviewService
 
 
 def build_providers(repo: SettingsRepository, secrets: SecretStore) -> ProviderRegistry:
@@ -88,7 +89,7 @@ def main() -> int:
     ocr, deps = build_ocr_services(repo, providers, models)
     services = AppServices(repo, TaskService(), templates, providers, models,
                            AiService(providers, validator), secrets, build_document_service(),
-                           ocr, deps)
+                           ocr, deps, ReviewService(validator))
     MainWindow(root, settings, services)
     root.mainloop()
     return 0
