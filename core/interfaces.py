@@ -5,7 +5,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from typing import TYPE_CHECKING
 
+from core.models import OCRResult
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 @dataclass(frozen=True)
 class ModelInfo:
@@ -30,16 +35,16 @@ class AiProvider(ABC):
     def analyze_image(self, image: Path, prompt: str, model: str, **options: Any) -> str:
         raise NotImplementedError(f"{self.id} does not support image analysis")
 
-
 class OcrEngine(ABC):
+    """Strategy interface for OCR engines (input: a preprocessed PIL image)."""
+
     id: str
 
     @abstractmethod
     def is_available(self) -> tuple[bool, str]: ...
 
     @abstractmethod
-    def extract(self, image: Path, languages: str) -> Any: ...
-
+    def extract(self, image: "Image.Image", languages: str) -> OCRResult: ...
 
 @dataclass(frozen=True)
 class ExportResult:

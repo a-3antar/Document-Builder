@@ -17,6 +17,8 @@ from ui.views.app_settings_view import AppSettingsView
 from ui.views.base_view import BaseView, error_text
 from ui.views.create_document_view import CreateDocumentView
 from ui.views.home_view import HomeView
+from ui.views.dependencies_view import DependenciesView
+from ui.views.ocr_view import OcrView
 
 log = logging.getLogger(__name__)
 
@@ -33,16 +35,19 @@ class MainWindow:
 
         self._status = tk.StringVar(value="Ready")
         ttk.Label(root, textvariable=self._status, anchor="w", relief="sunken").pack(side="bottom", fill="x")
-        Sidebar(root, [("home", "Home"), ("create", "Create Document"),
-                       ("ai", "AI Settings"), ("settings", "Application Settings")],
-                self.show).pack(side="left", fill="y")
+        Sidebar(root, [("home", "Home"), ("create", "Create Document"), ("ocr", "Image & OCR"),
+                       ("ai", "AI Settings"), ("settings", "Application Settings"),
+                       ("deps", "Dependencies")], self.show).pack(side="left", fill="y")
         self._workspace = ttk.Frame(root)
         self._workspace.pack(side="left", fill="both", expand=True)
 
+        get_settings = lambda: self._settings  # noqa: E731
         self._views["home"] = HomeView(self._workspace, services.templates, self._on_template)
-        self._views["create"] = CreateDocumentView(self._workspace, services, lambda: self._settings)
+        self._views["create"] = CreateDocumentView(self._workspace, services, get_settings)
+        self._views["ocr"] = OcrView(self._workspace, services, get_settings)
         self._views["ai"] = AiSettingsView(self._workspace, settings, services, self._save_settings)
         self._views["settings"] = AppSettingsView(self._workspace, settings, self._save_settings)
+        self._views["deps"] = DependenciesView(self._workspace, services, lambda: self.show("settings"))
         self.show("home")
 
         root.protocol("WM_DELETE_WINDOW", self._close)

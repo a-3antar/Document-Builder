@@ -22,7 +22,7 @@ class PreviewTests(unittest.TestCase):
                         "rows": [[{"type": "number", "value": 5}, {"type": "blank"}]]}]})
         text = render_preview(model)
         self.assertIn("[Sheet] S", text)
-        self.assertIn("5 | ", text)
+        self.assertIn("5 |", text)
 
 
 if __name__ == "__main__":

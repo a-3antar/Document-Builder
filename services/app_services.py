@@ -7,7 +7,9 @@ from ai.model_registry import ModelRegistry, ProviderRegistry
 from document.template_registry import TemplateRegistry
 from repositories.settings_repository import SecretStore, SettingsRepository
 from services.ai_service import AiService
+from services.dependency_service import DependencyService
 from services.document_service import DocumentService
+from services.ocr_service import OcrService
 from services.task_service import TaskService
 
 
@@ -21,3 +23,5 @@ class AppServices:
     ai: AiService
     secrets: SecretStore
     documents: DocumentService
+    ocr: OcrService
+    deps: DependencyService

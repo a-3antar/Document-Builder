@@ -74,3 +74,22 @@ FORMULA_ALLOWED_FUNCTIONS: Final = frozenset(
 EXCEL_TABLE_STYLE: Final = "TableStyleMedium2"
 EXCEL_MAX_COL_WIDTH: Final = 60
 DEFAULT_ACCENT_HEX: Final = "1F4E78"
+
+# --- OCR (Stage 4) ---
+TESSERACT_URL: Final = "https://github.com/UB-Mannheim/tesseract/wiki"
+POPPLER_URL: Final = "https://github.com/oschwartz10612/poppler-windows/releases"
+TESSERACT_WIN_PATHS: Final = (
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+)
+OCR_MAX_EDGE_PX: Final = 3000
+PDF_RENDER_DPI: Final = 200
+OCR_CONFIDENCE_THRESHOLD: Final = 0.6
+OCR_SUBPROCESS_TIMEOUT: Final = 120
+OCR_UNCERTAIN_OPEN: Final = "[?"
+OCR_UNCERTAIN_CLOSE: Final = "?]"
+PDF_MIN_CHARS_PER_PAGE: Final = 10
+TESSERACT_TO_EASYOCR: Final = {"ara": "ar", "eng": "en"}
+EASYOCR_DETECTOR_FILE: Final = "craft_mlt_25k.pth"
+EASYOCR_WEIGHT_FILES: Final = {"ar": "arabic.pth", "en": "english_g2.pth"}
+LANGUAGE_NAMES: Final = {"ara": "Arabic", "eng": "English"}

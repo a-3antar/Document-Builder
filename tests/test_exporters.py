@@ -20,6 +20,11 @@ from document.template_registry import Template
 from document.word_exporter import WordExporter
 from services.document_service import DocumentService, safe_filename, unique_path
 
+from config.paths import resource_path
+from document.fonts import find_arabic_font
+from tests.font_helper import prepare_font_dir
+
+
 TPL = Template("t", "T", "d", ContentKind.DOCUMENT, "document_content.schema.json",
                {"font": "Calibri", "arabic_font": "Arial", "body_size_pt": 11, "margins_cm": 2.5,
                 "heading_numbering": True},
@@ -27,8 +32,21 @@ TPL = Template("t", "T", "d", ContentKind.DOCUMENT, "document_content.schema.jso
                 "freeze_panes": True},
                {"font": "Helvetica", "margins_cm": 2.0, "header": True, "footer": True})
 
-_FONT_DIRS = [Path("/usr/share/fonts/truetype/dejavu"), Path("C:/Windows/Fonts")]
-FONT_DIR = next((d for d in _FONT_DIRS if (d / "DejaVuSans.ttf").is_file()), None)
+
+
+
+def _find_test_font_dir() -> Path | None:
+    """Bundled font if present, otherwise a system Arabic-capable font (test only)."""
+    try:
+        find_arabic_font()
+        return resource_path("fonts")
+    except FontNotFoundError:
+        pass
+    found = prepare_font_dir()
+    return found[0] if found else None
+
+
+FONT_DIR = _find_test_font_dir()
 
 
 class FakeShaper:

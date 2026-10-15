@@ -18,10 +18,17 @@ from document.excel_exporter import ExcelExporter
 from document.pdf_exporter_reportlab import PdfExporter
 from document.template_registry import TemplateRegistry
 from document.word_exporter import WordExporter
+from image_processing.easyocr_engine import EasyOcrEngine
+from image_processing.image_preprocessor import ImagePreprocessor
+from image_processing.pdf_loader import PdfLoader
+from image_processing.processing_pipeline import ProcessingPipeline
+from image_processing.tesseract_ocr import TesseractEngine
 from repositories.settings_repository import SecretStore, SettingsRepository
 from services.ai_service import AiService
 from services.app_services import AppServices
+from services.dependency_service import DependencyService
 from services.document_service import DocumentService
+from services.ocr_service import OcrService
 from services.task_service import TaskService
 from ui.main_window import MainWindow
 
@@ -46,6 +53,17 @@ def build_document_service() -> DocumentService:
     })
 
 
+def build_ocr_services(repo: SettingsRepository, providers: ProviderRegistry,
+                       models: ModelRegistry) -> tuple[OcrService, DependencyService]:
+    """Wire OCR engines, pipeline and dependency checks."""
+    tesseract = TesseractEngine(lambda: repo.load().tesseract_path, temp_dir=paths.temp_dir())
+    pdf = PdfLoader(lambda: repo.load().poppler_path)
+    pipeline = ProcessingPipeline(ImagePreprocessor(), pdf)
+    ocr = OcrService(providers, models, pipeline, tesseract, EasyOcrEngine(), pdf, paths.temp_dir())
+    deps = DependencyService(repo.load, lambda: providers.create(ProviderId.OLLAMA.value), tesseract)
+    return ocr, deps
+
+
 def main() -> int:
     paths.ensure_dirs(paths.config_dir(), paths.logs_dir(), paths.temp_dir())
     repo = SettingsRepository(paths.config_dir())
@@ -66,9 +84,11 @@ def main() -> int:
 
     secrets = SecretStore()
     providers = build_providers(repo, secrets)
-    services = AppServices(repo, TaskService(), templates, providers,
-                           ModelRegistry(providers), AiService(providers, validator), secrets,
-                           build_document_service())
+    models = ModelRegistry(providers)
+    ocr, deps = build_ocr_services(repo, providers, models)
+    services = AppServices(repo, TaskService(), templates, providers, models,
+                           AiService(providers, validator), secrets, build_document_service(),
+                           ocr, deps)
     MainWindow(root, settings, services)
     root.mainloop()
     return 0
