@@ -12,6 +12,9 @@ from core.exceptions import TemplateValidationError
 from core.schema_validator import SchemaValidator
 
 _REQUIRED_KEYS = ("id", "name", "description", "content_kind", "schema", "word", "excel", "pdf")
+_SCHEMA_PREFIX = {ContentKind.DOCUMENT: "document_content",
+                  ContentKind.WORKBOOK: "workbook_content",
+                  ContentKind.SPREADSHEET: "workbook_spec"}
 
 
 @dataclass(frozen=True)
@@ -24,6 +27,7 @@ class Template:
     word: dict[str, Any]
     excel: dict[str, Any]
     pdf: dict[str, Any]
+    guidance: str = ""  # extra instructions appended to the AI prompt
 
 
 class TemplateRegistry:
@@ -58,12 +62,11 @@ class TemplateRegistry:
                 f"Template '{name}': unknown content_kind '{data['content_kind']}'") from exc
         if not self._validator.schema_exists(data["schema"]):
             raise TemplateValidationError(f"Template '{name}': schema '{data['schema']}' not found")
-        expected = "document_content" if kind is ContentKind.DOCUMENT else "workbook_content"
-        if not data["schema"].startswith(expected):
+        if not data["schema"].startswith(_SCHEMA_PREFIX[kind]):
             raise TemplateValidationError(
                 f"Template '{name}': schema '{data['schema']}' is incompatible with {kind.value} content")
         return Template(data["id"], name, data["description"], kind, data["schema"],
-                        data["word"], data["excel"], data["pdf"])
+                        data["word"], data["excel"], data["pdf"], str(data.get("guidance", "")))
 
     def all(self) -> list[Template]:
         return list(self._templates.values())

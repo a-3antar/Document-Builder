@@ -10,11 +10,12 @@ from config.constants import OutputFormat
 from core.exceptions import ExportError, OutputExistsError
 from core.interfaces import BaseExporter, ExportResult
 from core.models import DocumentContentModel, WorkbookContentModel
+from core.workbook_spec import WorkbookSpec
 from document.content_converter import adapt_content
 from document.template_registry import Template
 
 ExporterFactory = Callable[[Template], BaseExporter]
-Content = DocumentContentModel | WorkbookContentModel
+Content = DocumentContentModel | WorkbookContentModel | WorkbookSpec
 
 _ILLEGAL_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)),
@@ -40,8 +41,12 @@ def unique_path(path: Path) -> Path:
 
 
 class DocumentService:
-    def __init__(self, factories: Mapping[OutputFormat, ExporterFactory]) -> None:
+    """`factories` serve classic content; `spec_factory` serves WorkbookSpec (Excel only)."""
+
+    def __init__(self, factories: Mapping[OutputFormat, ExporterFactory],
+                 spec_factory: ExporterFactory | None = None) -> None:
         self._factories = dict(factories)
+        self._spec_factory = spec_factory
 
     def suggest_filename(self, content: Content, fmt: OutputFormat | str) -> str:
         return safe_filename(content.metadata.title, OutputFormat(fmt))
@@ -51,12 +56,13 @@ class DocumentService:
         """Export content; never replaces an existing file unless overwrite=True."""
         fmt = OutputFormat(fmt)
         path = Path(output_path)
-        factory = self._factories.get(fmt)
+        adapted, notes = adapt_content(content, fmt)
+        factory = (self._spec_factory if isinstance(adapted, WorkbookSpec)
+                   else self._factories.get(fmt))
         if factory is None:
             raise ExportError(f"No exporter is registered for '{fmt.value}'.")
         if path.exists() and not overwrite:
             raise OutputExistsError(f"'{path.name}' already exists.",
                                     hint=f"Choose another name, for example '{unique_path(path).name}'.")
-        adapted, notes = adapt_content(content, fmt)
         result = factory(template).export(adapted, path)
         return replace(result, warnings=(*notes, *result.warnings))

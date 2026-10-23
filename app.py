@@ -32,6 +32,7 @@ from services.ocr_service import OcrService
 from services.task_service import TaskService
 from ui.main_window import MainWindow
 from services.review_service import ReviewService
+from document.excel_spec_exporter import SpecExcelExporter
 
 
 def build_providers(repo: SettingsRepository, secrets: SecretStore) -> ProviderRegistry:
@@ -44,14 +45,13 @@ def build_providers(repo: SettingsRepository, secrets: SecretStore) -> ProviderR
                                               timeout=repo.load().timeout_seconds))
     return providers
 
-
 def build_document_service() -> DocumentService:
-    """Register one exporter factory per output format."""
+    """Register one exporter factory per output format, plus the spec-driven Excel exporter."""
     return DocumentService({
         OutputFormat.DOCX: WordExporter,
         OutputFormat.XLSX: ExcelExporter,
         OutputFormat.PDF: PdfExporter,
-    })
+    }, spec_factory=SpecExcelExporter)
 
 
 def build_ocr_services(repo: SettingsRepository, providers: ProviderRegistry,

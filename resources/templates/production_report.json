@@ -2,8 +2,9 @@
   "id": "production_report",
   "name": "Production Report",
   "description": "KPIs, tables, and observations.",
-  "content_kind": "workbook",
-  "schema": "workbook_content.schema.json",
+  "content_kind": "spreadsheet",
+  "schema": "workbook_spec.schema.json",
+  "guidance": "Build a production-monitoring workbook: a Dashboard sheet first (KPIs and charts), a Data sheet with one row per record and computed columns (for example variance and efficiency as fractions), column totals, and a Summary sheet grouping by line, product or shift. List assumptions in notes.",
   "word": {
     "font": "Calibri",
     "arabic_font": "Arial",

@@ -43,7 +43,7 @@ class OcrMethod(StrEnum):
 class ContentKind(StrEnum):
     DOCUMENT = "document"
     WORKBOOK = "workbook"
-
+    SPREADSHEET = "spreadsheet"
 
 SUPPORTED_IMAGE_EXTENSIONS: Final = frozenset({".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"})
 SUPPORTED_INPUT_EXTENSIONS: Final = SUPPORTED_IMAGE_EXTENSIONS | {".pdf", ".docx", ".xlsx"}
@@ -70,7 +70,8 @@ PDF_LATIN_FONTS: Final = (
 )
 FORMULA_MAX_LENGTH: Final = 255
 FORMULA_ALLOWED_FUNCTIONS: Final = frozenset(
-    {"SUM", "AVERAGE", "MIN", "MAX", "COUNT", "COUNTA", "ROUND", "ABS", "IF"})
+    {"SUM", "AVERAGE", "MIN", "MAX", "COUNT", "COUNTA", "ROUND", "ABS", "IF",
+     "IFERROR", "AND", "OR"})
 EXCEL_TABLE_STYLE: Final = "TableStyleMedium2"
 EXCEL_MAX_COL_WIDTH: Final = 60
 DEFAULT_ACCENT_HEX: Final = "1F4E78"
@@ -93,3 +94,5 @@ TESSERACT_TO_EASYOCR: Final = {"ara": "ar", "eng": "en"}
 EASYOCR_DETECTOR_FILE: Final = "craft_mlt_25k.pth"
 EASYOCR_WEIGHT_FILES: Final = {"ar": "arabic.pth", "en": "english_g2.pth"}
 LANGUAGE_NAMES: Final = {"ara": "Arabic", "eng": "English"}
+TEMPERATURE: Final = 0.2
+

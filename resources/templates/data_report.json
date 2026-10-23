@@ -2,8 +2,9 @@
     "id": "data_report",
     "name": "Data Report",
     "description": "Data tables with native Excel charts.",
-    "content_kind": "workbook",
-    "schema": "workbook_content.schema.json",
+    "content_kind": "spreadsheet",
+    "schema": "workbook_spec.schema.json",
+    "guidance": "Build a data workbook: a Dashboard sheet first with KPIs and charts, then one Data sheet per dataset with typed columns and totals, and a Summary sheet when grouping helps. Use null for unknown figures and mark approximate or unverified figures in notes.",
     "word": {
         "font": "Calibri",
         "arabic_font": "Arial",

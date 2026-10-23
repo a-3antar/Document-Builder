@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import re
-
+from core.exceptions import ExportError
+from core.workbook_spec import WorkbookSpec
 from config.constants import OutputFormat
 from core.models import (Cell, DocumentContentModel, Heading, ListBlock, Paragraph, Sheet, Table,
                          WorkbookContentModel)
@@ -52,9 +53,15 @@ def document_to_workbook(doc: DocumentContentModel) -> WorkbookContentModel:
         sheets.insert(0, Sheet("Content", ("Type", "Text"), tuple(text_rows)))
     return WorkbookContentModel(doc.metadata, sheets, doc.needs_review, doc.schema_version)
 
-def adapt_content(content: DocumentContentModel | WorkbookContentModel, fmt: OutputFormat
-                  ) -> tuple[DocumentContentModel | WorkbookContentModel, list[str]]:
+def adapt_content(content: DocumentContentModel | WorkbookContentModel | WorkbookSpec,
+                  fmt: OutputFormat
+                  ) -> tuple[DocumentContentModel | WorkbookContentModel | WorkbookSpec, list[str]]:
     """Return content matching the format plus user-facing notes about any conversion."""
+    if isinstance(content, WorkbookSpec):
+        if fmt is not OutputFormat.XLSX:
+            raise ExportError("This spreadsheet can only be exported to Excel.",
+                              hint="Choose Excel, or use a document template for Word/PDF.")
+        return content, []
     if fmt is OutputFormat.XLSX and isinstance(content, DocumentContentModel):
         return document_to_workbook(content), [
             "Document content was converted to a workbook: tables became sheets, "
