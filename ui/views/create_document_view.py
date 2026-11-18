@@ -1,4 +1,4 @@
-"""Create Document: instructions -> AI -> validated content preview -> export."""
+"""Create Document: instructions -> AI -> validated content preview -> review/export."""
 from __future__ import annotations
 
 import os
@@ -21,6 +21,8 @@ from ui.theme import PAD
 from ui.views.base_view import BaseView, error_text
 
 _FORMAT_LABELS = {OutputFormat.DOCX: "Word", OutputFormat.XLSX: "Excel", OutputFormat.PDF: "PDF"}
+Content = DocumentContentModel | WorkbookContentModel | WorkbookSpec
+ReviewCallback = Callable[[Content, Template, str], None]
 
 
 class CreateDocumentView(BaseView):
@@ -28,9 +30,9 @@ class CreateDocumentView(BaseView):
     subtitle = "Describe the document you need. The AI returns structured content for review."
 
     def __init__(self, parent: Any, services: AppServices,
-                 get_settings: Callable[[], AppSettings]) -> None:
+                 get_settings: Callable[[], AppSettings], on_review: ReviewCallback) -> None:
         super().__init__(parent)
-        self._svc, self._get_settings = services, get_settings
+        self._svc, self._get_settings, self._on_review = services, get_settings, on_review
         self.last_result: StructuredResult | None = None
         self._last_template: Template | None = None
         self._last_path: Path | None = None
@@ -78,12 +80,15 @@ class CreateDocumentView(BaseView):
         self._fmt_box = ttk.Combobox(export, textvariable=self._fmt, state="readonly", width=10,
                                      values=list(_FORMAT_LABELS.values()))
         self._fmt_box.pack(side="left", padx=PAD)
+        self._review_btn = ttk.Button(export, text="Review & edit", command=self._review,
+                                      state="disabled")
+        self._review_btn.pack(side="left")
         self._export_btn = ttk.Button(export, text="Export...", command=self._export,
                                       state="disabled")
-        self._export_btn.pack(side="left")
+        self._export_btn.pack(side="left", padx=PAD)
         self._folder_btn = ttk.Button(export, text="Open folder", command=self._open_folder,
                                       state="disabled")
-        self._folder_btn.pack(side="left", padx=PAD)
+        self._folder_btn.pack(side="left")
 
     def set_template(self, template_id: str) -> None:
         self._tpl.set(self._svc.templates.get(template_id).name)
@@ -101,6 +106,12 @@ class CreateDocumentView(BaseView):
         self._out.insert("1.0", text)
         self._out.configure(state="disabled")
 
+    def _set_actions(self, enabled: bool) -> None:
+        """Enable or disable the buttons that need valid generated content."""
+        state = ["!disabled"] if enabled else ["disabled"]
+        self._export_btn.state(state)
+        self._review_btn.state(state)
+
     # --- generation ---
     def _generate(self) -> None:
         s = self._get_settings()
@@ -116,7 +127,7 @@ class CreateDocumentView(BaseView):
                 "Cloud processing", "Your instructions will be sent to Google Gemini. Continue?"):
             return
         self._busy(True, "Starting...")
-        self._export_btn.state(["disabled"])
+        self._set_actions(False)
         template = self._by_name[self._tpl.get()]
         self._svc.tasks.submit(self._work, s.provider, model, instructions, template,
                                on_event=lambda e: self._on_generated(e, template))
@@ -160,20 +171,26 @@ class CreateDocumentView(BaseView):
                                                                  ContentKind.SPREADSHEET))
             if workbook:
                 self._fmt.set(_FORMAT_LABELS[OutputFormat.XLSX])  # workbook content belongs in Excel
-            self._status.set("Content generated. Review it below, then export.")
-            self._export_btn.state(["!disabled"])
+            self._status.set("Content generated. Review it, then export.")
+            self._set_actions(True)
         else:
             issues = "\n".join(f"- {i}" for i in result.issues)
             self._write(f"The AI output did not match the schema:\n{issues}\n\n"
                         f"Original response:\n{result.raw}")
             self._status.set("Validation failed - retry or adjust your instructions.")
 
-    # --- export ---
+    # --- review / export ---
+    def _review(self) -> None:
+        """Hand the generated content to Structured Review."""
+        result, template = self.last_result, self._last_template
+        if result and result.ok and template:
+            self._on_review(result.content, template, "AI")
+
     def _export(self) -> None:
         result, template = self.last_result, self._last_template
         if not (result and result.ok and template):
             return
-        content: DocumentContentModel | WorkbookContentModel | WorkbookSpec = result.content
+        content: Content = result.content
         fmt = (OutputFormat.XLSX if isinstance(content, WorkbookSpec)
                else self._by_label[self._fmt.get()])
         options: dict[str, Any] = {
@@ -187,11 +204,11 @@ class CreateDocumentView(BaseView):
         if not chosen:
             return
         self._busy(True, "Exporting...")
-        self._export_btn.state(["disabled"])
+        self._set_actions(False)
         self._svc.tasks.submit(self._export_work, content, template, fmt, Path(chosen),
                                on_event=self._on_exported)
 
-    def _export_work(self, ctx: TaskContext, content: Any, template: Template,
+    def _export_work(self, ctx: TaskContext, content: Content, template: Template,
                      fmt: OutputFormat, path: Path) -> ExportResult:
         """Worker thread: the user already confirmed overwrite in the save dialog."""
         ctx.progress(30, "Creating file...")
@@ -203,7 +220,7 @@ class CreateDocumentView(BaseView):
             self._status.set(event.message)
             return
         self._busy(False)
-        self._export_btn.state(["!disabled"])
+        self._set_actions(True)
         if event.kind is EventKind.ERROR:
             self._status.set("Export failed.")
             messagebox.showerror("Export failed", error_text(event.payload))

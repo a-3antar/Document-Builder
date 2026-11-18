@@ -19,9 +19,10 @@ from ui.components.content_preview import render_preview
 from ui.components.structured_editor import StructuredEditor
 from ui.theme import PAD
 from ui.views.base_view import BaseView, error_text
+from core.workbook_spec import WorkbookSpec
 
 _FORMAT_LABELS = {OutputFormat.DOCX: "Word", OutputFormat.XLSX: "Excel", OutputFormat.PDF: "PDF"}
-Content = DocumentContentModel | WorkbookContentModel
+Content = DocumentContentModel | WorkbookContentModel | WorkbookSpec
 
 
 class ReviewView(BaseView):
@@ -33,7 +34,7 @@ class ReviewView(BaseView):
         super().__init__(parent)
         self._svc, self._get_settings = services, get_settings
         self._template: Template | None = None
-        self._workbook: WorkbookContentModel | None = None
+        self._workbook: WorkbookContentModel | WorkbookSpec | None = None
         self._last_path: Path | None = None
         self._by_label = {label: fmt for fmt, label in _FORMAT_LABELS.items()}
 
@@ -52,6 +53,9 @@ class ReviewView(BaseView):
         bar.pack(fill="x")
         ttk.Label(bar, text="Output").pack(side="left")
         self._fmt = tk.StringVar(value=_FORMAT_LABELS[OutputFormat.DOCX])
+        self._fmt_box = ttk.Combobox(bar, textvariable=self._fmt, state="readonly", width=10,
+                                     values=list(_FORMAT_LABELS.values()))
+        self._fmt_box.pack(side="left", padx=PAD)
         ttk.Combobox(bar, textvariable=self._fmt, state="readonly", width=10,
                      values=list(_FORMAT_LABELS.values())).pack(side="left", padx=PAD)
         self._export_btn = ttk.Button(bar, text="Export...", command=self._export, state="disabled")
@@ -134,7 +138,8 @@ class ReviewView(BaseView):
         content = self._prepare() if template else None
         if content is None or template is None:
             return
-        fmt = self._by_label[self._fmt.get()]
+        fmt = (OutputFormat.XLSX if isinstance(content, WorkbookSpec)
+               else self._by_label[self._fmt.get()])
         options: dict[str, Any] = {
             "title": "Export document", "defaultextension": f".{fmt.value}",
             "filetypes": [(_FORMAT_LABELS[fmt], f"*.{fmt.value}")],
